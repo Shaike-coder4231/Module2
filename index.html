@@ -104,14 +104,15 @@
                     <input type="text" id="email" placeholder="example@mail.ru">
                     <div class="error" id="errEmail">Введите корректный email</div>
                 </div>
+                <!-- Блокировка ручного ввода + принудительное открытие календаря -->
                 <div class="form-group">
                     <label>Дата заезда *</label>
-                    <input type="date" id="checkIn">
+                    <input type="date" id="checkIn" onkeydown="return false" onpaste="return false" onfocus="this.showPicker()">
                     <div class="error" id="errDateIn">Выберите дату заезда</div>
                 </div>
                 <div class="form-group">
                     <label>Дата выезда *</label>
-                    <input type="date" id="checkOut">
+                    <input type="date" id="checkOut" onkeydown="return false" onpaste="return false" onfocus="this.showPicker()">
                     <div class="error" id="errDateOut">Выберите дату выезда</div>
                 </div>
                 <button type="submit" class="btn-submit">Отправить заявку</button>
@@ -193,10 +194,14 @@
         document.getElementById('booking-page').classList.remove('hidden');
         document.getElementById('bookingRoomId').textContent = `#${id}`;
         
-        // Блокируем выбор прошедших дат при открытии формы
         const today = new Date().toISOString().split('T')[0];
-        document.getElementById('checkIn').setAttribute('min', today);
-        document.getElementById('checkOut').setAttribute('min', today);
+        const checkInEl = document.getElementById('checkIn');
+        const checkOutEl = document.getElementById('checkOut');
+        
+        checkInEl.setAttribute('min', today);
+        checkInEl.value = '';
+        checkOutEl.value = '';
+        checkOutEl.removeAttribute('min');
         
         window.scrollTo(0,0);
     }
@@ -232,6 +237,24 @@
         e.target.value = formatted;
     });
 
+    // 📅 АВТО-ОБНОВЛЕНИЕ МИНИМАЛЬНОЙ ДАТЫ ВЫЕЗДА
+    document.getElementById('checkIn').addEventListener('change', function() {
+        const val = this.value;
+        const checkOutEl = document.getElementById('checkOut');
+        if (val) {
+            const nextDay = new Date(val);
+            nextDay.setDate(nextDay.getDate() + 1);
+            checkOutEl.setAttribute('min', nextDay.toISOString().split('T')[0]);
+            
+            // Если была выбрана невалидная дата выезда, сбрасываем её
+            if (checkOutEl.value && checkOutEl.value <= val) {
+                checkOutEl.value = '';
+            }
+        } else {
+            checkOutEl.removeAttribute('min');
+        }
+    });
+
     // ✅ ВАЛИДАЦИЯ И ОТПРАВКА
     document.getElementById('bookingForm').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -255,20 +278,26 @@
         validate('phone', /^\+7\(\d{3}\)\d{3}-\d{2}-\d{2}$/, 'errPhone');
         validate('email', /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'errEmail');
         
-        // Валидация календаря (нативный input type="date" всегда отдаёт YYYY-MM-DD)
-        const validateDate = (id, errId) => {
-            const val = document.getElementById(id).value;
-            const err = document.getElementById(errId);
-            if (!val || val.length !== 10 || !/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-                err.style.display = 'block';
-                document.getElementById(id).style.borderColor = '#ef4444';
+        // Валидация дат
+        const dateInVal = document.getElementById('checkIn').value;
+        const dateOutVal = document.getElementById('checkOut').value;
+        const errIn = document.getElementById('errDateIn');
+        const errOut = document.getElementById('errDateOut');
+
+        if (!dateInVal) { errIn.style.display = 'block'; document.getElementById('checkIn').style.borderColor = '#ef4444'; isValid = false; }
+        else errIn.style.display = 'none';
+        
+        if (!dateOutVal) { errOut.style.display = 'block'; document.getElementById('checkOut').style.borderColor = '#ef4444'; isValid = false; }
+        else errOut.style.display = 'none';
+
+        if (isValid && dateInVal && dateOutVal) {
+            if (new Date(dateOutVal) <= new Date(dateInVal)) {
+                errOut.textContent = 'Дата выезда должна быть позже даты заезда';
+                errOut.style.display = 'block';
+                document.getElementById('checkOut').style.borderColor = '#ef4444';
                 isValid = false;
-            } else {
-                err.style.display = 'none';
             }
-        };
-        validateDate('checkIn', 'errDateIn');
-        validateDate('checkOut', 'errDateOut');
+        }
 
         if (isValid) {
             const toast = document.getElementById('successToast');
